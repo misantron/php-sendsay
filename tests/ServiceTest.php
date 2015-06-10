@@ -24,8 +24,8 @@ class ServiceTest extends BaseTestCase
 
     public function testGetUser()
     {
-        $expected = [];
-        $actual = $this->service->getUser('');
+        $expected = null;
+        $actual = $this->service->getUser('blablabla@gmail.com');
         $this->assertEquals($expected, $actual);
     }
 }

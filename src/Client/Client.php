@@ -44,7 +44,7 @@ class Client implements ClientInterface
     {
         $this->options = array_merge($this->options, $options);
 
-        $this->client = new HttpClient();
+        $this->httpClient = new HttpClient();
 
         if($this->options['log']['enabled']){
             $this->logger = new Logger($this->options['log']['file.name'], [
@@ -61,10 +61,12 @@ class Client implements ClientInterface
     private function init()
     {
         if (!isset($this->session)) {
-            $response = $this->request('login', [
+            /** @var MessageInterface $message */
+            $message = $this->request('login', [
                 'login' => $this->options['login'],
                 'passwd' => $this->options['password']
             ]);
+            $response = $message->getData();
             if(!isset($response['session'])){
                 throw new \InvalidArgumentException('Api login or password is invalid');
             }
@@ -81,16 +83,14 @@ class Client implements ClientInterface
      */
     public function request($action, $data = [])
     {
-        $params = [];
-
         $message = new Message();
 
         try {
-            $this->log('info', 'request:' . $action, $data);
-
             $data['action'] = $action;
 
             $params = $this->buildRequestParams($data);
+
+            $this->log('info', 'request:' . $action, $data);
 
             $redirectCount = 0;
             $redirectPath = '';
@@ -108,31 +108,52 @@ class Client implements ClientInterface
 
             $this->log('info', 'response:' . $action, $response ?: []);
 
-            return $message->setData($response);
-        } catch (ClientException $e){
-            $this->log('error', 'error:' . $e->getMessage(), $params);
+            if (isset($response['errors'])) {
+                $errorMessage = $this->getErrorMessageFromResponse($response);
+                $this->log('error', 'error:' . $action, [
+                    'params' => $data,
+                    'message' => $errorMessage,
+                ]);
+                return $message->setError($errorMessage);
+            }
 
+            return $message->setData(isset($response['obj']) ? $response['obj'] : $response);
+        } catch (ClientException $e){
+            $this->log('error', 'exception:' . $action, [
+                'params' => $data,
+                'message' => $e->getMessage(),
+            ]);
             return $message->setError($e->getMessage());
         }
+    }
+
+    /**
+     * @param array $response
+     * @return string
+     */
+    private function getErrorMessageFromResponse($response)
+    {
+        $error = reset($response['errors']);
+        if(!isset($error['explain'])){
+            return $error['id'];
+        }
+        return is_string($error['explain']) ? $error['explain'] : serialize($error['explain']);
     }
 
     /**
      * @param string $url
      * @param array $params
      * @return array|null
-     *
-     * @throws ClientException
      */
     private function sendRequest($url, $params = [])
     {
         /** @var ResponseInterface $response */
-        $response = $this->httpClient->post($url, $params);
+        $response = $this->httpClient->post($url, [
+            'verify' => false,
+            'body' => $params
+        ]);
 
-        $data = $response->json();
-        if (isset($data['errors'])) {
-            throw new ClientException($data['errors']);
-        }
-        return $data;
+        return $response->json();
     }
 
     /**
@@ -142,10 +163,9 @@ class Client implements ClientInterface
      */
     private function log($method, $message, $data)
     {
-        if(!($this->logger instanceof Logger)){
-            return;
+        if($this->logger instanceof Logger){
+            $this->logger->$method($message, $data);
         }
-        $this->logger->$method($message, $data);
     }
 
     /**
@@ -158,7 +178,6 @@ class Client implements ClientInterface
             'apiversion' => self::API_VERSION,
             'json'       => self::JSON_RESPONSE,
             'request.id' => mt_rand(100, 999),
-            'session'    => $this->session,
             'request'    => $this->encodeRequestData($data),
         ];
     }
@@ -169,6 +188,9 @@ class Client implements ClientInterface
      */
     private function encodeRequestData($data)
     {
+        if($this->session !== null){
+            $data['session'] = $this->session;
+        }
         array_walk($data, function($item, $key){
             if(!mb_detect_encoding($item, 'utf-8', true)){
                 $data[$key] = utf8_encode($item);
