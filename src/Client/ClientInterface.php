@@ -1,19 +1,20 @@
 <?php
 
-namespace Sendsay;
+namespace Sendsay\Client;
 
 use Sendsay\Exception\AccessDeniedException;
 use Sendsay\Exception\TooManyRedirectsException;
+use Sendsay\Message\MessageInterface;
 
-interface TransportInterface
+interface ClientInterface
 {
     /**
      * @param string $action
      * @param array $data
-     * @return array
+     * @return MessageInterface
      *
      * @throws AccessDeniedException
      * @throws TooManyRedirectsException
      */
-    public function sendRequest($action, $data = []);
+    public function request($action, $data = []);
 }
