@@ -4,16 +4,6 @@ namespace Sendsay\Tests;
 
 class BaseTestCase extends \PHPUnit_Framework_TestCase
 {
-    protected function setUp()
-    {
-        parent::setUp();
-
-        $vendorAutoloadPath = dirname(__FILE__) . '/../vendor/autoload.php';
-        if (file_exists($vendorAutoloadPath)) {
-            require_once $vendorAutoloadPath;
-        }
-    }
-
     /**
      * Call protected class method using reflection
      *
