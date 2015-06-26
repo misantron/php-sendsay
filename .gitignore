@@ -1,6 +1,6 @@
 .idea
 
-vendor/*
+vendor/
+log/
 
 composer.lock
-composer.phar

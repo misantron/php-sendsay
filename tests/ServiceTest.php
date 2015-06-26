@@ -4,6 +4,8 @@ namespace Sendsay\Tests;
 
 use Sendsay\Service;
 
+date_default_timezone_set('UTC');
+
 class ServiceTest extends BaseTestCase
 {
     /** @var Service */
@@ -16,7 +18,7 @@ class ServiceTest extends BaseTestCase
         $options = [
             'login' => '',
             'password' => '',
-            'log.enabled' => false
+            'log.file.path' => '\\log\\sendsay.log',
         ];
 
         $this->service = new Service($options);
@@ -25,7 +27,7 @@ class ServiceTest extends BaseTestCase
     public function testGetUser()
     {
         $expected = null;
-        $actual = $this->service->getUser('blablabla@gmail.com');
+        $actual = $this->service->getUser('blabla@gmail.com');
         $this->assertEquals($expected, $actual);
     }
 }

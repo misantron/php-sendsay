@@ -2,7 +2,7 @@
 
 namespace Sendsay\Exception;
 
-class TooManyRedirectsException extends ClientException
+class TooManyRedirectsException extends \Exception
 {
 
 }

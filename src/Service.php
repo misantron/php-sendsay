@@ -32,6 +32,10 @@ class Service
     {
         /** @var MessageInterface $response */
         $response = $this->client->request('member.get', ['email' => $email]);
-        return $response->hasError() ? null : $response->getData();
+        if($response->hasError()){
+            return null;
+        }
+        $data = $response->getData();
+        return $data['member'];
     }
 }

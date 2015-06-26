@@ -4,9 +4,9 @@ namespace Sendsay\Client;
 
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Message\ResponseInterface;
+use GuzzleHttp\Subscriber\Log\LogSubscriber;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
-use Sendsay\Exception\ClientException;
 use Sendsay\Exception\TooManyRedirectsException;
 use Sendsay\Message\Message;
 use Sendsay\Message\MessageInterface;
@@ -19,38 +19,34 @@ class Client implements ClientInterface
         REDIRECT_LIMIT = 10
     ;
 
-    /** @var string */
-    private $baseUrl = 'https://api.sendsay.ru/';
-    /** @var string */
-    private $session;
-
-    /** @var Logger */
-    private $logger;
     /** @var HttpClient */
-    private $httpClient;
+    protected $httpClient;
+
+    /** @var string */
+    protected $baseUrl = 'https://api.sendsay.ru/';
+    /** @var string */
+    protected $logger = 'api.sendsay';
 
     /** @var array */
-    private $options = [
+    protected $options = [
         'login' => null,
         'password' => null,
-        'log' => [
-            'enabled' => false,
-            'file.name' => 'sendsay.api.request',
-            'file.path' => null,
-        ]
+        'log.file.path' => null,
     ];
+
+    /** @var string */
+    private $session;
 
     public function __construct($options)
     {
         $this->options = array_merge($this->options, $options);
 
+        $logger = new Logger($this->logger, [
+            new StreamHandler($this->options['log.file.path'], Logger::INFO)
+        ]);
+        $subscriber = new LogSubscriber($logger);
         $this->httpClient = new HttpClient();
-
-        if($this->options['log']['enabled']){
-            $this->logger = new Logger($this->options['log']['file.name'], [
-                new StreamHandler($this->options['log']['file.path'], Logger::INFO)
-            ]);
-        }
+        $this->httpClient->getEmitter()->attach($subscriber);
 
         $this->init();
     }
@@ -66,11 +62,11 @@ class Client implements ClientInterface
                 'login' => $this->options['login'],
                 'passwd' => $this->options['password']
             ]);
-            $response = $message->getData();
-            if(!isset($response['session'])){
+            $data = $message->getData();
+            if(!isset($data['session'])){
                 throw new \InvalidArgumentException('Api login or password is invalid');
             }
-            $this->session = $response['session'];
+            $this->session = $data['session'];
         }
     }
 
@@ -90,8 +86,6 @@ class Client implements ClientInterface
 
             $params = $this->buildRequestParams($data);
 
-            $this->log('info', 'request:' . $action, $data);
-
             $redirectCount = 0;
             $redirectPath = '';
 
@@ -106,23 +100,13 @@ class Client implements ClientInterface
                 }
             } while (isset($response['REDIRECT']));
 
-            $this->log('info', 'response:' . $action, $response ?: []);
-
             if (isset($response['errors'])) {
                 $errorMessage = $this->getErrorMessageFromResponse($response);
-                $this->log('error', 'error:' . $action, [
-                    'params' => $data,
-                    'message' => $errorMessage,
-                ]);
                 return $message->setError($errorMessage);
             }
 
             return $message->setData(isset($response['obj']) ? $response['obj'] : $response);
-        } catch (ClientException $e){
-            $this->log('error', 'exception:' . $action, [
-                'params' => $data,
-                'message' => $e->getMessage(),
-            ]);
+        } catch (\Exception $e){
             return $message->setError($e->getMessage());
         }
     }
@@ -154,18 +138,6 @@ class Client implements ClientInterface
         ]);
 
         return $response->json();
-    }
-
-    /**
-     * @param string $method
-     * @param string $message
-     * @param array $data
-     */
-    private function log($method, $message, $data)
-    {
-        if($this->logger instanceof Logger){
-            $this->logger->$method($message, $data);
-        }
     }
 
     /**
