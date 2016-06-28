@@ -10,18 +10,19 @@ class Service
     /** @var Client */
     private $client;
 
-    public function __construct($options)
+    public function __construct($credentials, $options = [])
     {
-        $this->client = new Client($options);
+        $this->client = new Client($credentials, $options);
     }
 
     /**
+     * @param array $credentials
      * @param array $options
      * @return Service
      */
-    public static function create($options)
+    public static function create($credentials, $options = [])
     {
-        return new static($options);
+        return new static($credentials, $options);
     }
 
     /**

@@ -1,8 +1,9 @@
 {
     "name": "misantron/php-sendsay",
+    "description": "Object-oriented interface to Sendsay API.",
     "type": "library",
     "require": {
-        "php": ">=5.4.0",
+        "php": ">=5.4",
         "guzzlehttp/guzzle": "~5.3",
         "guzzlehttp/log-subscriber": "~1.0",
         "monolog/monolog": "~1.0"

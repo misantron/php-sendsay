@@ -2,6 +2,8 @@
 
 namespace Sendsay\Tests;
 
+date_default_timezone_set('UTC');
+
 class BaseTestCase extends \PHPUnit_Framework_TestCase
 {
     /**
@@ -12,11 +14,23 @@ class BaseTestCase extends \PHPUnit_Framework_TestCase
      * @param array $args
      * @return mixed
      */
-    protected static function callMethod($obj, $name, $args = array())
+    protected function callMethod($obj, $name, $args = [])
     {
         $class = new \ReflectionClass($obj);
         $method = $class->getMethod($name);
         $method->setAccessible(true);
         return $method->invokeArgs(null, $args);
+    }
+
+    /**
+     * @param string $class
+     * @param string $name
+     * @return mixed
+     */
+    protected function getProperty($class, $name)
+    {
+        $property = new \ReflectionProperty($class, $name);
+        $property->setAccessible(true);
+        return $property->getValue($class);
     }
 }

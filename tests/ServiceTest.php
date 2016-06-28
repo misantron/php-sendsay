@@ -4,8 +4,6 @@ namespace Sendsay\Tests;
 
 use Sendsay\Service;
 
-date_default_timezone_set('UTC');
-
 class ServiceTest extends BaseTestCase
 {
     /** @var Service */

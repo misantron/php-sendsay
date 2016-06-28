@@ -13,58 +13,53 @@ use Sendsay\Message\MessageInterface;
 
 class Client implements ClientInterface
 {
-    const
-        API_VERSION    = 100,
-        JSON_RESPONSE  = 1,
-        REDIRECT_LIMIT = 10
-    ;
+    const API_VERSION = 100;
+    const JSON_RESPONSE = 1;
+    const REDIRECT_LIMIT = 10;
+
+    const API_END_POINT = 'https://api.sendsay.ru/';
 
     /** @var HttpClient */
     protected $httpClient;
 
-    /** @var string */
-    protected $baseUrl = 'https://api.sendsay.ru/';
-    /** @var string */
-    protected $logger = 'api.sendsay';
-
     /** @var array */
-    protected $options = [
+    protected $credentials = [
         'login' => null,
-        'password' => null,
-        'log.file.path' => null,
+        'sublogin' => null,
+        'passwd' => null
     ];
 
     /** @var string */
     private $session;
 
-    public function __construct($options)
+    public function __construct($credentials, $options)
     {
-        $this->options = array_merge($this->options, $options);
+        if (!$credentials) {
+            throw new \InvalidArgumentException('Invalid api credentials');
+        }
+        
+        $this->credentials = $credentials;
 
-        $logger = new Logger($this->logger, [
-            new StreamHandler($this->options['log.file.path'], Logger::INFO)
+        $logger = new Logger('api.sendsay', [
+            new StreamHandler($options['log.path'], Logger::INFO)
         ]);
         $subscriber = new LogSubscriber($logger);
         $this->httpClient = new HttpClient();
         $this->httpClient->getEmitter()->attach($subscriber);
 
-        $this->init();
+        $this->login();
     }
 
     /**
      * @throws \InvalidArgumentException
      */
-    private function init()
+    private function login()
     {
         if (!isset($this->session)) {
-            /** @var MessageInterface $message */
-            $message = $this->request('login', [
-                'login' => $this->options['login'],
-                'passwd' => $this->options['password']
-            ]);
+            $message = $this->request('login', $this->credentials);
             $data = $message->getData();
-            if(!isset($data['session'])){
-                throw new \InvalidArgumentException('Api login or password is invalid');
+            if (!isset($data['session'])) {
+                throw new \InvalidArgumentException($message->getError());
             }
             $this->session = $data['session'];
         }
@@ -90,7 +85,7 @@ class Client implements ClientInterface
             $redirectPath = '';
 
             do {
-                $response = $this->sendRequest($this->baseUrl . $redirectPath, $params);
+                $response = $this->sendRequest(self::API_END_POINT . $redirectPath, $params);
                 if (isset($response['REDIRECT'])){
                     $redirectPath = $response['REDIRECT'];
                 }
@@ -105,10 +100,11 @@ class Client implements ClientInterface
                 return $message->setError($errorMessage);
             }
 
-            return $message->setData(isset($response['obj']) ? $response['obj'] : $response);
+            $message->setData(isset($response['obj']) ? $response['obj'] : $response);
         } catch (\Exception $e){
-            return $message->setError($e->getMessage());
+            $message->setError($e->getMessage());
         }
+        return $message;
     }
 
     /**
@@ -146,28 +142,15 @@ class Client implements ClientInterface
      */
     private function buildRequestParams($data)
     {
-        return [
-            'apiversion' => self::API_VERSION,
-            'json'       => self::JSON_RESPONSE,
-            'request.id' => mt_rand(100, 999),
-            'request'    => $this->encodeRequestData($data),
-        ];
-    }
-
-    /**
-     * @param array $data
-     * @return string
-     */
-    private function encodeRequestData($data)
-    {
-        if($this->session !== null){
+        if ($this->session !== null && !isset($data['session'])) {
             $data['session'] = $this->session;
         }
-        array_walk($data, function($item, $key){
-            if(!mb_detect_encoding($item, 'utf-8', true)){
-                $data[$key] = utf8_encode($item);
-            }
-        });
-        return json_encode($data);
+
+        return [
+            'apiversion' => self::API_VERSION,
+            'json' => self::JSON_RESPONSE,
+            'request.id' => mt_rand(100, 999),
+            'request' => json_encode($data),
+        ];
     }
 }
