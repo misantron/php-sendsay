@@ -2,50 +2,47 @@
 
 namespace Sendsay\Client;
 
-use GuzzleHttp\Client as HttpClient;
-use GuzzleHttp\Message\ResponseInterface;
-use GuzzleHttp\Subscriber\Log\LogSubscriber;
-use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
+use GuzzleHttp\Client;
+use Sendsay\Credentials;
 use Sendsay\Exception\TooManyRedirectsException;
 use Sendsay\Message\Message;
 use Sendsay\Message\MessageInterface;
 
-class Client implements ClientInterface
+class Transport implements TransportInterface
 {
-    const API_VERSION = 100;
-    const JSON_RESPONSE = 1;
     const REDIRECT_LIMIT = 10;
 
-    const API_END_POINT = 'https://api.sendsay.ru/';
+    /**
+     * @var Client
+     */
+    protected $client;
 
-    /** @var HttpClient */
-    protected $httpClient;
-
-    /** @var array */
-    protected $credentials = [
-        'login' => null,
-        'sublogin' => null,
-        'passwd' => null
+    /**
+     * @var array
+     */
+    private $defaultRequestParams = [
+        'apiversion' => 100,
+        'json' => 1,
     ];
 
-    /** @var string */
+    /**
+     * @var array
+     */
+    private $credentials;
+
+    /**
+     * @var string
+     */
     private $session;
 
-    public function __construct($credentials, $options)
+    /**
+     * @param Credentials $credentials
+     * @param Client $client
+     */
+    public function __construct(Credentials $credentials, Client $client)
     {
-        if (!$credentials) {
-            throw new \InvalidArgumentException('Invalid api credentials');
-        }
-        
         $this->credentials = $credentials;
-
-        $logger = new Logger('api.sendsay', [
-            new StreamHandler($options['log.path'], Logger::INFO)
-        ]);
-        $subscriber = new LogSubscriber($logger);
-        $this->httpClient = new HttpClient();
-        $this->httpClient->getEmitter()->attach($subscriber);
+        $this->client = $client;
 
         $this->login();
     }
@@ -56,7 +53,7 @@ class Client implements ClientInterface
     private function login()
     {
         if (!isset($this->session)) {
-            $message = $this->request('login', $this->credentials);
+            $message = $this->request('login');
             $data = $message->getData();
             if (!isset($data['session'])) {
                 throw new \InvalidArgumentException($message->getError());
@@ -72,9 +69,13 @@ class Client implements ClientInterface
      *
      * @throws TooManyRedirectsException
      */
-    public function request($action, $data = [])
+    public function request($action, array $data = null)
     {
         $message = new Message();
+
+        if ($data === null) {
+            $data = $this->credentials->getData();
+        }
 
         try {
             $data['action'] = $action;
@@ -82,10 +83,10 @@ class Client implements ClientInterface
             $params = $this->buildRequestParams($data);
 
             $redirectCount = 0;
-            $redirectPath = '';
+            $redirectPath = '/';
 
             do {
-                $response = $this->sendRequest(self::API_END_POINT . $redirectPath, $params);
+                $response = $this->sendRequest($redirectPath, $params);
                 if (isset($response['REDIRECT'])){
                     $redirectPath = $response['REDIRECT'];
                 }
@@ -111,10 +112,10 @@ class Client implements ClientInterface
      * @param array $response
      * @return string
      */
-    private function getErrorMessageFromResponse($response)
+    private function getErrorMessageFromResponse(array $response)
     {
         $error = reset($response['errors']);
-        if(!isset($error['explain'])){
+        if (!isset($error['explain'])) {
             return $error['id'];
         }
         return is_string($error['explain']) ? $error['explain'] : serialize($error['explain']);
@@ -125,32 +126,29 @@ class Client implements ClientInterface
      * @param array $params
      * @return array|null
      */
-    private function sendRequest($url, $params = [])
+    private function sendRequest($url, array $params = [])
     {
-        /** @var ResponseInterface $response */
-        $response = $this->httpClient->post($url, [
+        $response = $this->client->post($url, [
             'verify' => false,
-            'body' => $params
+            'form_params' => $params
         ]);
 
-        return $response->json();
+        return json_decode($response->getBody(), true);
     }
 
     /**
      * @param array $data
      * @return array
      */
-    private function buildRequestParams($data)
+    private function buildRequestParams(array $data)
     {
         if ($this->session !== null && !isset($data['session'])) {
             $data['session'] = $this->session;
         }
 
-        return [
-            'apiversion' => self::API_VERSION,
-            'json' => self::JSON_RESPONSE,
-            'request.id' => mt_rand(100, 999),
-            'request' => json_encode($data),
-        ];
+        return array_merge(
+            $this->defaultRequestParams,
+            ['request' => json_encode($data)]
+        );
     }
 }

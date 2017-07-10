@@ -6,26 +6,10 @@ use Sendsay\Service;
 
 class ServiceTest extends BaseTestCase
 {
-    /** @var Service */
-    private $service;
-
-    protected function setUp()
+    public function testConstructor()
     {
-        parent::setUp();
-
-        $options = [
-            'login' => '',
-            'password' => '',
-            'log.file.path' => '\\log\\sendsay.log',
-        ];
-
-        $this->service = new Service($options);
-    }
-
-    public function testGetUser()
-    {
-        $expected = null;
-        $actual = $this->service->getUser('blabla@gmail.com');
-        $this->assertEquals($expected, $actual);
+        $service = new Service('foo', 'bar', 'test', [
+            'log.name' => 'api.sendsay'
+        ]);
     }
 }

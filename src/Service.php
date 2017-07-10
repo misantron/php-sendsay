@@ -2,27 +2,56 @@
 
 namespace Sendsay;
 
-use Sendsay\Client\Client;
-use Sendsay\Message\MessageInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\MessageFormatter;
+use GuzzleHttp\Middleware;
+use Monolog\Logger;
+use Sendsay\Client\Transport;
 
 class Service
 {
-    /** @var Client */
-    private $client;
+    const ENDPOINT = 'https://api.sendsay.ru/';
 
-    public function __construct($credentials, $options = [])
+    /** @var Transport */
+    private $transport;
+
+    /**
+     * @param string $login
+     * @param string $password
+     * @param string|null $subLogin
+     * @param array $options
+     */
+    public function __construct($login, $password, $subLogin = null, array $options = [])
     {
-        $this->client = new Client($credentials, $options);
+        $credentials = new Credentials($login, $subLogin, $password);
+
+        $stack = HandlerStack::create();
+        $stack->push(
+            Middleware::log(
+                new Logger($options['log.name']),
+                new MessageFormatter(isset($options['log.format']) ? $options['log.format'] : null)
+            )
+        );
+
+        $client = new Client([
+            'base_uri' => self::ENDPOINT,
+            'handler' => $stack
+        ]);
+
+        $this->transport = new Transport($credentials, $client);
     }
 
     /**
-     * @param array $credentials
+     * @param string $login
+     * @param string $password
+     * @param string|null $subLogin
      * @param array $options
      * @return Service
      */
-    public static function create($credentials, $options = [])
+    public static function create($login, $password, $subLogin = null, array $options = [])
     {
-        return new static($credentials, $options);
+        return new static($login, $password, $subLogin, $options);
     }
 
     /**
@@ -31,9 +60,8 @@ class Service
      */
     public function getUser($email)
     {
-        /** @var MessageInterface $response */
-        $response = $this->client->request('member.get', ['email' => $email]);
-        if($response->hasError()){
+        $response = $this->transport->request('member.get', ['email' => $email]);
+        if ($response->hasError()) {
             return null;
         }
         $data = $response->getData();

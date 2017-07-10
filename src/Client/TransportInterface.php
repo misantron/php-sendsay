@@ -5,7 +5,7 @@ namespace Sendsay\Client;
 use Sendsay\Exception\TooManyRedirectsException;
 use Sendsay\Message\MessageInterface;
 
-interface ClientInterface
+interface TransportInterface
 {
     /**
      * @param string $action
@@ -14,5 +14,5 @@ interface ClientInterface
      *
      * @throws TooManyRedirectsException
      */
-    public function request($action, $data = []);
+    public function request($action, array $data = []);
 }
